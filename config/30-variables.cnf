@@ -1,0 +1,21 @@
+[mysqld]
+bind-address = 0.0.0.0
+port = 3306
+character-set-server = utf8mb4
+collation-server = utf8mb4_0900_ai_ci
+default_storage_engine = InnoDB
+enforce_gtid_consistency = ON
+gtid_mode = ON
+host_cache_size = 0
+#innodb_numa_interleave = OFF
+log_replica_updates = ON
+mysqlx = 0
+percona_telemetry_disable = 1
+skip-external-locking
+skip-name-resolve = 1
+sql-mode = "STRICT_TRANS_TABLES,STRICT_ALL_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"
+tls_version = TLSv1.2,TLSv1.3
+
+# Old clients compatibility
+mysql_native_password = ON
+authentication_policy = '*,,'
