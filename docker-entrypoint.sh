@@ -10,7 +10,7 @@ mysql_log() {
   printf '%s [%s] [Entrypoint]: %s\n' "$dt" "$type" "$text"
 }
 mysql_note() { mysql_log Note "$@"; }
-mysql_warn() { mysql_log Warn "$@" >&2; }
+mysql_warn() { mysql_log Warn "$@"; }
 mysql_error(){ mysql_log ERROR "$@" >&2; exit 1; }
 
 # usage: file_env VAR [DEFAULT]
@@ -79,6 +79,20 @@ mysql_socket_fix() {
   defaultSocket="$(mysql_get_config 'socket' mysqld --no-defaults)"
   if [ "$defaultSocket" != "$SOCKET" ]; then
     ln -sfTv "$SOCKET" "$defaultSocket" || :
+  fi
+}
+
+# Enforce ownership and permissions on /etc/mysql/mysql.conf.d/*
+enforce_mysql_conf_permissions() {
+  local dir="/etc/mysql/mysql.conf.d"
+  [ -d "$dir" ] || return 0
+  if [ "$(id -u)" = "0" ]; then
+    mysql_note "Enforcing root:root ownership and 0644 permissions under ${dir}"
+    find "$dir" -type f -print0 | xargs -0 --no-run-if-empty chown root:root
+    find "$dir" -type f -print0 | xargs -0 --no-run-if-empty chmod 0644
+  else
+    mysql_warn "Not running as root; cannot set owner root:root for ${dir}. Continuing."
+    find "$dir" -type f -user "$(id -u)" -print0 | xargs -0 --no-run-if-empty chmod 0644 || true
   fi
 }
 
@@ -212,14 +226,12 @@ EOSQL
       CREATE USER IF NOT EXISTS 'ping'@'localhost' IDENTIFIED BY 'pong';
       GRANT USAGE ON *.* TO 'ping'@'localhost';
 EOSQL
-    # Optional subnet-specific account: create before granting
     if [ -n "$MYSQL_ROOT_HOST" ] && [[ "$MYSQL_ROOT_HOST" == 172.* ]]; then
       ping_block+=$'\n'"CREATE USER IF NOT EXISTS 'ping'@'172.%.%.%' IDENTIFIED BY 'pong';"
       ping_block+=$'\n'"GRANT USAGE ON *.* TO 'ping'@'172.%.%.%';"
     fi
   fi
 
-  # 4) execute in one session
   docker_process_sql --dont-use-mysql-root-password --database=mysql <<-EOSQL
     SET autocommit = 1;
     SET @@SESSION.SQL_LOG_BIN=0;
@@ -231,7 +243,6 @@ EOSQL
     DROP DATABASE IF EXISTS test;
 EOSQL
 
-  # 5) optional application db & user
   if [ -n "$MYSQL_DATABASE" ]; then
     mysql_note "Creating database ${MYSQL_DATABASE}"
     docker_process_sql --database=mysql <<<"CREATE DATABASE IF NOT EXISTS \`$MYSQL_DATABASE\`;"
@@ -287,7 +298,9 @@ _main() {
     docker_setup_env "$@"
     docker_create_db_directories "$@"
 
-    # If container started as root, re-exec as mysql (not expected when USER mysql)
+    # Ensure /etc/mysql/mysql.conf.d/* is root-owned and 0644 before dropping privileges
+    enforce_mysql_conf_permissions
+
     if [ "$(id -u)" = "0" ]; then
       mysql_note "Switching to dedicated user 'mysql'"
       exec gosu mysql "$BASH_SOURCE" "$@"
