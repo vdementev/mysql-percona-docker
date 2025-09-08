@@ -10,7 +10,7 @@ mysql_log() {
   printf '%s [%s] [Entrypoint]: %s\n' "$dt" "$type" "$text"
 }
 mysql_note() { mysql_log Note "$@"; }
-mysql_warn() { mysql_log Warn "$@"; }
+mysql_warn() { mysql_log Warn "$@" >&2; }
 mysql_error(){ mysql_log ERROR "$@" >&2; exit 1; }
 
 # usage: file_env VAR [DEFAULT]
@@ -79,20 +79,6 @@ mysql_socket_fix() {
   defaultSocket="$(mysql_get_config 'socket' mysqld --no-defaults)"
   if [ "$defaultSocket" != "$SOCKET" ]; then
     ln -sfTv "$SOCKET" "$defaultSocket" || :
-  fi
-}
-
-# Enforce ownership and permissions on /etc/mysql/mysql.conf.d/*
-enforce_mysql_conf_permissions() {
-  local dir="/etc/mysql/mysql.conf.d"
-  [ -d "$dir" ] || return 0
-  if [ "$(id -u)" = "0" ]; then
-    mysql_note "Enforcing root:root ownership and 0644 permissions under ${dir}"
-    find "$dir" -type f -print0 | xargs -0 --no-run-if-empty chown root:root
-    find "$dir" -type f -print0 | xargs -0 --no-run-if-empty chmod 0644
-  else
-    mysql_warn "Not running as root; cannot set owner root:root for ${dir}. Continuing."
-    find "$dir" -type f -user "$(id -u)" -print0 | xargs -0 --no-run-if-empty chmod 0644 || true
   fi
 }
 
@@ -297,9 +283,6 @@ _main() {
     mysql_check_config "$@"
     docker_setup_env "$@"
     docker_create_db_directories "$@"
-
-    # Ensure /etc/mysql/mysql.conf.d/* is root-owned and 0644 before dropping privileges
-    enforce_mysql_conf_permissions
 
     if [ "$(id -u)" = "0" ]; then
       mysql_note "Switching to dedicated user 'mysql'"

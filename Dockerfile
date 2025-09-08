@@ -94,9 +94,7 @@ WORKDIR /app
 HEALTHCHECK --start-interval=15s --interval=10s --timeout=3s --start-period=60s --retries=3 \
   CMD ["mysqladmin","--host=127.0.0.1","--user=ping","--password=pong","--connect-timeout=1","--silent","ping"]
 
-# We need to start container as root to fix configs permissions with docker-entrypoint.sh
-# For mysql server user will be changed automatically to mysql.
-USER root
+USER mysql
 
 EXPOSE 3306
 ENTRYPOINT ["/docker-entrypoint.sh"]
