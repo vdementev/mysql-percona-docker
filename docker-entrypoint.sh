@@ -211,9 +211,6 @@ EOSQL
     read -r -d '' ping_block <<-'EOSQL' || true
       CREATE USER IF NOT EXISTS 'ping'@'localhost' IDENTIFIED BY 'pong';
       GRANT USAGE ON *.* TO 'ping'@'localhost';
-
-      CREATE USER IF NOT EXISTS 'ping'@'%' IDENTIFIED BY 'pong';
-      GRANT USAGE ON *.* TO 'ping'@'%';
 EOSQL
     # Optional subnet-specific account: create before granting
     if [ -n "$MYSQL_ROOT_HOST" ] && [[ "$MYSQL_ROOT_HOST" == 172.* ]]; then
