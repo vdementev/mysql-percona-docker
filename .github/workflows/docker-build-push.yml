@@ -8,6 +8,7 @@ on:
       - "Dockerfile.*"
       - ".github/workflows/**"
       - "config/**"
+      - "docker-entrypoint.sh"
   workflow_dispatch:
 
 

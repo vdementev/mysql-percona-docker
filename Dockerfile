@@ -4,6 +4,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN set -eux; \
     apt-get update; \
+    apt-get upgrade -y -q; \
     apt-get install -y -q --no-install-recommends --no-install-suggests \
     ca-certificates \
     curl \
