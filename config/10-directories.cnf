@@ -2,13 +2,14 @@
 datadir             = /var/lib/mysql
 secure-file-priv    = /var/lib/mysql-files
 secure-log-path     = /var/log/mysql
-log-error           = /var/log/mysql/error.log
-log-error           = /dev/stderr
+# log-error           = /var/log/mysql/error.log
 slow_query_log_file = /var/log/mysql/mysql-slow.log 
 tmpdir              = /tmp
 replica-load-tmpdir = /tmp-replica 
 socket              = /var/run/mysqld/mysqld.sock
 pid-file            = /var/run/mysqld/mysqld.pid
+
+log_error_services = log_filter_internal, log_sink_internal, log_sink_json
 
 [client]
 socket              = /var/run/mysqld/mysqld.sock
