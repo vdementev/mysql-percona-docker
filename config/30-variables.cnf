@@ -19,3 +19,7 @@ tls_version = TLSv1.2,TLSv1.3
 # Old clients compatibility
 mysql_native_password = ON
 authentication_policy = '*,,'
+
+# Logging
+# log_error_services = log_filter_internal, log_sink_internal, log_sink_json
+log_error_services = log_filter_internal, log_sink_internal
