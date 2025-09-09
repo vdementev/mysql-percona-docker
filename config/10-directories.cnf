@@ -1,7 +1,7 @@
 [mysqld]
 datadir             = /var/lib/mysql
 secure-file-priv    = /var/lib/mysql-files
-# secure-log-path     = /var/log/mysql
+secure-log-path     = /var/log/mysql
 # log-error           = /var/log/mysql/error.log
 slow_query_log_file = /var/log/mysql/mysql-slow.log 
 tmpdir              = /tmp

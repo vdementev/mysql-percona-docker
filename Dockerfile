@@ -57,7 +57,7 @@ RUN set -eux; \
     rm -rf /var/run/mysqld; \
     install -d -m 0755 -o root -g root /etc/mysql; \
     install -d -m 0755 -o mysql -g mysql /var/lib/mysql; \
-    install -d -m 0755 -o mysql -g mysql /var/log/mysql; \
+    install -d -m 0750 -o mysql -g mysql /var/log/mysql; \
     install -d -m 0750 -o mysql -g mysql /var/run/mysqld; \
     install -d -m 0750 -o mysql -g mysql /var/lib/mysql-files; \
     install -d -m 0750 -o mysql -g mysql /docker-entrypoint-initdb.d; \
