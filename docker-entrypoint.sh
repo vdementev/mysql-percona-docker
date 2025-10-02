@@ -150,7 +150,8 @@ docker_setup_env() {
   DATADIR="$(mysql_get_config 'datadir' "$@")"
   SOCKET="$(mysql_get_config 'socket'  "$@")"
 
-  file_env 'MYSQL_ROOT_HOST' '172.%.%.%'
+  # file_env 'MYSQL_ROOT_HOST' '172.%.%.%'
+  file_env 'MYSQL_ROOT_HOST' '%'
   file_env 'MYSQL_DATABASE'
   file_env 'MYSQL_USER'
   file_env 'MYSQL_PASSWORD'
