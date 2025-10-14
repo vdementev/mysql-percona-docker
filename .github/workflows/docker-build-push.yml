@@ -3,12 +3,12 @@ name: Build & Push Images
 on:
   push:
     branches: [main]
-    paths:
-      - "Dockerfile"
-      - "Dockerfile.*"
-      - ".github/workflows/**"
-      - "config/**"
-      - "docker-entrypoint.sh"
+    # paths:
+    #   - "Dockerfile"
+    #   - "Dockerfile.*"
+    #   - ".github/workflows/**"
+    #   - "config/**"
+    #   - "docker-entrypoint.sh"
   workflow_dispatch:
 
 env:
