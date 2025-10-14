@@ -3,7 +3,6 @@
 ## Include
 - xtrabackup
 - toolkit
-- mysql-router
 
 Custom configs could be placed under /etc/mysql/mysql.conf.d/
 
