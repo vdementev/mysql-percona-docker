@@ -1,4 +1,4 @@
-FROM debian:12-slim
+FROM debian:13-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -30,7 +30,6 @@ RUN set -eux; \
 
 ENV LANG=en_US.UTF-8
 ENV LC_ALL=en_US.UTF-8
-ENV LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2 
 ENV PERCONA_TELEMETRY_DISABLE=1
 
 COPY --chown=root:root ./docker-entrypoint.sh /docker-entrypoint.sh
@@ -68,6 +67,15 @@ RUN set -eux; \
     chmod 0644 /docker-entrypoint.sh; \
     chmod +x /docker-entrypoint.sh
 
+# Create an arch-agnostic jemalloc path and preload via a stable location
+RUN set -eux; \
+    multiarch="$(dpkg-architecture -qDEB_HOST_MULTIARCH)"; \
+    if [ -f "/usr/lib/${multiarch}/libjemalloc.so.2" ]; then \
+    ln -sf "/usr/lib/${multiarch}/libjemalloc.so.2" /usr/lib/libjemalloc.so.2; \
+    fi
+
+ENV LD_PRELOAD=/usr/lib/libjemalloc.so.2
+
 COPY --chown=root:root ./config/ /etc/mysql/mysql.conf.d/
 
 RUN set -eux; \
@@ -87,12 +95,13 @@ RUN set -eux; \
     rm -f server-req.pem client-req.pem; \
     chown -R mysql:mysql /etc/mysql/ssl; \
     chmod 600 ca-key.pem server-key.pem client-key.pem; \
-    chmod 644 ca.pem server-cert.pem client-cert.pem;
+    chmod 644 ca.pem server-cert.pem client-cert.pem
 
 VOLUME ["/var/lib/mysql"]
 WORKDIR /app
+
 HEALTHCHECK --start-interval=15s --interval=10s --timeout=3s --start-period=60s --retries=3 \
-  CMD ["mysqladmin","--host=127.0.0.1","--user=ping","--password=pong","--connect-timeout=1","--silent","ping"]
+    CMD ["mysqladmin","--host=127.0.0.1","--user=ping","--password=pong","--connect-timeout=1","--silent","ping"]
 
 USER mysql
 

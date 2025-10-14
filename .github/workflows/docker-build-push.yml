@@ -2,7 +2,7 @@ name: Build & Push Images
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
       - "Dockerfile"
       - "Dockerfile.*"
@@ -10,7 +10,6 @@ on:
       - "config/**"
       - "docker-entrypoint.sh"
   workflow_dispatch:
-
 
 env:
   IMAGE_REPO: ${{ secrets.DOCKERHUB_USERNAME }}/mysql-percona
