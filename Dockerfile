@@ -67,14 +67,7 @@ RUN set -eux; \
     chmod 0644 /docker-entrypoint.sh; \
     chmod +x /docker-entrypoint.sh
 
-# Create an arch-agnostic jemalloc path and preload via a stable location
-RUN set -eux; \
-    multiarch="$(dpkg-architecture -qDEB_HOST_MULTIARCH)"; \
-    if [ -f "/usr/lib/${multiarch}/libjemalloc.so.2" ]; then \
-    ln -sf "/usr/lib/${multiarch}/libjemalloc.so.2" /usr/lib/libjemalloc.so.2; \
-    fi
-
-ENV LD_PRELOAD=/usr/lib/libjemalloc.so.2
+ENV LD_PRELOAD=libjemalloc.so.2
 
 COPY --chown=root:root ./config/ /etc/mysql/mysql.conf.d/
 
