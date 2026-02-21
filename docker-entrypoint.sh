@@ -212,6 +212,8 @@ EOSQL
     read -r -d '' ping_block <<-'EOSQL' || true
       CREATE USER IF NOT EXISTS 'ping'@'localhost' IDENTIFIED BY 'pong';
       GRANT USAGE ON *.* TO 'ping'@'localhost';
+      CREATE USER IF NOT EXISTS 'ping'@'127.0.0.1' IDENTIFIED BY 'pong';
+      GRANT USAGE ON *.* TO 'ping'@'127.0.0.1';
 EOSQL
     if [ -n "$MYSQL_ROOT_HOST" ] && [[ "$MYSQL_ROOT_HOST" == 172.* ]]; then
       ping_block+=$'\n'"CREATE USER IF NOT EXISTS 'ping'@'172.%.%.%' IDENTIFIED BY 'pong';"
@@ -285,10 +287,13 @@ _main() {
     docker_setup_env "$@"
     docker_create_db_directories "$@"
 
-    if [ "$(id -u)" = "0" ]; then
-      mysql_note "Switching to dedicated user 'mysql'"
-      exec gosu mysql "$BASH_SOURCE" "$@"
-    fi
+    # Note: gosu is not installed in this image.
+    # The container runs as USER mysql (see Dockerfile), so this block
+    # is not reached. If root execution is needed, install gosu first.
+    # if [ "$(id -u)" = "0" ]; then
+    #   mysql_note "Switching to dedicated user 'mysql'"
+    #   exec gosu mysql "$BASH_SOURCE" "$@"
+    # fi
 
     if [ -z "$DATABASE_ALREADY_EXISTS" ]; then
       docker_verify_minimum_env

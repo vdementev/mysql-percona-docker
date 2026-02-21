@@ -10,13 +10,10 @@ RUN set -eux; \
     curl \
     gnupg \
     gpgv \
-    libjemalloc-dev \
     libjemalloc2 \
     locales \
     lsb-release \
     lz4 \
-    mc \
-    nano \
     procps \
     zstd; \
     apt-get clean; \
@@ -47,6 +44,8 @@ RUN set -eux; \
     percona-server-server \
     percona-xtrabackup-84 \
     percona-toolkit; \
+    # Remove packages only needed for repo setup
+    apt-get purge -y --auto-remove curl gnupg gpgv lsb-release; \
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*; \
     # Prepare directories
@@ -60,6 +59,7 @@ RUN set -eux; \
     install -d -m 0750 -o mysql -g mysql /var/run/mysqld; \
     install -d -m 0750 -o mysql -g mysql /var/lib/mysql-files; \
     install -d -m 0750 -o mysql -g mysql /docker-entrypoint-initdb.d; \
+    install -d -m 0750 -o mysql -g mysql /tmp-replica; \
     # Make global include file
     printf '%s\n' '!includedir /etc/mysql/mysql.conf.d/' > /etc/my.cnf; \
     chown root:root /etc/my.cnf; \
