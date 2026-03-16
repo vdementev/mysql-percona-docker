@@ -44,8 +44,7 @@ RUN set -eux; \
     percona-server-server \
     percona-xtrabackup-84 \
     percona-toolkit; \
-    # Remove packages only needed for repo setup
-    apt-get purge -y --auto-remove curl gnupg gpgv lsb-release; \
+    # Note: do NOT purge curl/gnupg/gpgv/lsb-release — percona-server-server depends on percona-release which depends on curl
     apt-get clean; \
     rm -rf /var/lib/apt/lists/*; \
     # Prepare directories
