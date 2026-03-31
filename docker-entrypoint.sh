@@ -265,6 +265,32 @@ EOSQL
   fi
 }
 
+mysql_generate_ssl_certs() {
+  local ssl_dir="/etc/mysql/ssl"
+  if [ -f "$ssl_dir/server-cert.pem" ]; then
+    mysql_note "SSL certificates already exist, skipping generation"
+    return
+  fi
+  mysql_note "Generating SSL certificates"
+  openssl req -x509 -nodes -newkey rsa:2048 -days 3650 \
+    -keyout "$ssl_dir/ca-key.pem" -out "$ssl_dir/ca.pem" \
+    -subj "/C=US/ST=CA/L=MyCity/O=MyCompany/OU=MyUnit/CN=My-CA"
+  openssl req -nodes -newkey rsa:2048 \
+    -keyout "$ssl_dir/server-key.pem" -out "$ssl_dir/server-req.pem" \
+    -subj "/C=US/ST=CA/L=MyCity/O=MyCompany/OU=MyUnit/CN=server.example.com"
+  openssl x509 -req -in "$ssl_dir/server-req.pem" -CA "$ssl_dir/ca.pem" -CAkey "$ssl_dir/ca-key.pem" \
+    -days 3650 -CAcreateserial -out "$ssl_dir/server-cert.pem"
+  openssl req -nodes -newkey rsa:2048 \
+    -keyout "$ssl_dir/client-key.pem" -out "$ssl_dir/client-req.pem" \
+    -subj "/C=US/ST=CA/L=MyCity/O=MyCompany/OU=MyUnit/CN=client.example.com"
+  openssl x509 -req -in "$ssl_dir/client-req.pem" -CA "$ssl_dir/ca.pem" -CAkey "$ssl_dir/ca-key.pem" \
+    -days 3650 -CAcreateserial -out "$ssl_dir/client-cert.pem"
+  rm -f "$ssl_dir/server-req.pem" "$ssl_dir/client-req.pem"
+  chmod 600 "$ssl_dir/ca-key.pem" "$ssl_dir/server-key.pem" "$ssl_dir/client-key.pem"
+  chmod 644 "$ssl_dir/ca.pem" "$ssl_dir/server-cert.pem" "$ssl_dir/client-cert.pem"
+  mysql_note "SSL certificates generated"
+}
+
 _mysql_want_help() {
   local arg
   for arg; do
@@ -283,6 +309,7 @@ _main() {
   if [ "$1" = 'mysqld' ] && ! _mysql_want_help "$@"; then
     mysql_note "Entrypoint script for MySQL Server ${MYSQL_VERSION} started."
 
+    mysql_generate_ssl_certs
     mysql_check_config "$@"
     docker_setup_env "$@"
     docker_create_db_directories "$@"
