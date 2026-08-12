@@ -1,0 +1,31 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  schedule:
+    - cron: "55 3 * * 1" # weekly rebuild: fresh base layers + package updates
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    uses: vdementev/docker-workflows/.github/workflows/build-image.yml@v1
+    permissions:
+      contents: read
+      id-token: write
+    with:
+      image: mysql-percona
+      push: ${{ github.event_name != 'pull_request' }}
+      tags: |
+        type=raw,value=latest
+      labels: |
+        org.opencontainers.image.title=mysql-percona
+        org.opencontainers.image.description=Percona Server for MySQL 8.4 LTS on Debian slim — jemalloc, auto TLS, Docker-secrets support, unprivileged mysql user.
+        org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+        org.opencontainers.image.revision=${{ github.sha }}
+    secrets: inherit
