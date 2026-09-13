@@ -1,6 +1,30 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:best-practices"],
+  "customManagers": [
+    {
+      "description": "Percona Server is pinned as an apt version; track it through the upstream Docker Hub tags, which carry the same version-release string",
+      "customType": "regex",
+      "managerFilePatterns": ["/^Dockerfile$/"],
+      "matchStrings": [
+        "ARG PERCONA_SERVER_VERSION=(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+-[0-9]+)-[0-9]+\\.\\w+"
+      ],
+      "depNameTemplate": "percona/percona-server",
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "loose"
+    },
+    {
+      "description": "Same for XtraBackup, which has its own version line and must stay in the server's series",
+      "customType": "regex",
+      "managerFilePatterns": ["/^Dockerfile$/"],
+      "matchStrings": [
+        "ARG PERCONA_XTRABACKUP_VERSION=(?<currentValue>[0-9]+\\.[0-9]+\\.[0-9]+-[0-9]+)-[0-9]+\\.\\w+"
+      ],
+      "depNameTemplate": "percona/percona-xtrabackup",
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "loose"
+    }
+  ],
   "packageRules": [
     {
       "description": "Auto-merge base image digest/patch refreshes once CI is green",
@@ -12,6 +36,17 @@
       "description": "Minor/major base bumps stay as PRs for review",
       "matchManagers": ["dockerfile"],
       "matchUpdateTypes": ["minor", "major"],
+      "automerge": false
+    },
+    {
+      "description": "Stay on the 8.4 LTS series: 9.x is a different repository channel (pdps-84-lts) and an in-place datadir upgrade nobody should merge unattended",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["percona/percona-server", "percona/percona-xtrabackup"],
+      "allowedVersions": "<8.5"
+    },
+    {
+      "description": "A database server version is never auto-merged: the datadir upgrades in place on first start and does not go back",
+      "matchManagers": ["custom.regex"],
       "automerge": false
     },
     {

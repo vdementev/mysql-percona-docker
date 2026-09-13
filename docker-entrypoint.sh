@@ -162,6 +162,9 @@ docker_setup_env() {
   file_env 'MYSQL_USER'
   file_env 'MYSQL_PASSWORD'
   file_env 'MYSQL_ROOT_PASSWORD'
+  file_env 'MYSQL_BACKUP_USER' 'xtrabackup'
+  file_env 'MYSQL_BACKUP_PASSWORD'
+  file_env 'MYSQL_BACKUP_HOST'
 
   declare -g DATABASE_ALREADY_EXISTS
   if [ -d "$DATADIR/mysql" ]; then
@@ -421,6 +424,53 @@ mysql_ensure_healthcheck_user() {
 EOSQL
 }
 
+# XtraBackup ships in this image, so the server side it needs is set up here
+# rather than left to whoever runs the backup: the mysqlbackup component that
+# --page-tracking reads, and an account with the privileges a backup actually
+# takes (the documented list is incomplete — page tracking also needs SELECT on
+# mysql.component and SYSTEM_VARIABLES_ADMIN to set mysqlbackup.backupid, and
+# --safe-slave-backup needs REPLICATION_SLAVE_ADMIN).
+mysql_ensure_backup_support() {
+  local have
+  have="$(mysql_query_value "SELECT COUNT(*) FROM mysql.component WHERE component_urn='file://component_mysqlbackup'" 2>/dev/null || echo 0)"
+  if [ "$have" = '0' ]; then
+    mysql_note "Installing component_mysqlbackup (page-tracking incrementals)"
+    docker_process_sql --database=mysql <<<"INSTALL COMPONENT 'file://component_mysqlbackup';"
+  fi
+
+  [ -n "${MYSQL_BACKUP_PASSWORD:-}" ] || return 0
+
+  case "$MYSQL_BACKUP_USER" in
+    ''|*[!A-Za-z0-9_]*) mysql_error "MYSQL_BACKUP_USER may only contain letters, digits and _ , got '$MYSQL_BACKUP_USER'" ;;
+  esac
+  if [ -n "$MYSQL_BACKUP_HOST" ]; then
+    case "$MYSQL_BACKUP_HOST" in
+      *[!A-Za-z0-9.:_%-]*) mysql_error "MYSQL_BACKUP_HOST is not a valid host pattern: '$MYSQL_BACKUP_HOST'" ;;
+    esac
+  fi
+
+  local pass="$MYSQL_BACKUP_PASSWORD"
+  pass="${pass//\\/\\\\}"
+  pass="${pass//\'/\\\'}"
+
+  # localhost covers the socket (xtrabackup run inside this container), 127.0.0.1
+  # a client on the same network namespace; MYSQL_BACKUP_HOST adds a remote one.
+  local host
+  for host in localhost 127.0.0.1 $MYSQL_BACKUP_HOST; do
+    mysql_note "Ensuring backup user '${MYSQL_BACKUP_USER}'@'${host}'"
+    docker_process_sql --database=mysql <<-EOSQL
+      CREATE USER IF NOT EXISTS '${MYSQL_BACKUP_USER}'@'${host}' IDENTIFIED BY '${pass}';
+      ALTER USER '${MYSQL_BACKUP_USER}'@'${host}' IDENTIFIED BY '${pass}';
+      GRANT BACKUP_ADMIN, PROCESS, RELOAD, LOCK TABLES, REPLICATION CLIENT,
+            REPLICATION_SLAVE_ADMIN, SYSTEM_VARIABLES_ADMIN ON *.* TO '${MYSQL_BACKUP_USER}'@'${host}';
+      GRANT SELECT ON performance_schema.log_status TO '${MYSQL_BACKUP_USER}'@'${host}';
+      GRANT SELECT ON performance_schema.keyring_component_status TO '${MYSQL_BACKUP_USER}'@'${host}';
+      GRANT SELECT ON performance_schema.replication_group_members TO '${MYSQL_BACKUP_USER}'@'${host}';
+      GRANT SELECT ON mysql.component TO '${MYSQL_BACKUP_USER}'@'${host}';
+EOSQL
+  done
+}
+
 mysql_query_value() {
   docker_process_sql --database=mysql --batch --skip-column-names <<<"$1"
 }
@@ -451,6 +501,11 @@ mysql_bootstrap_on_start() {
       mysql_err "start-time bootstrap: could not create the 'ping' healthcheck user"
       return 1
     fi
+  fi
+
+  if ! mysql_ensure_backup_support; then
+    mysql_err "start-time bootstrap: could not set up backup support (component / backup user)"
+    return 1
   fi
 
   if ! docker_process_always_files; then
