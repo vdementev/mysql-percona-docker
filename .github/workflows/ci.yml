@@ -10,10 +10,30 @@ on:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # The Dockerfile is the single source of truth for what is installed; the tags
+  # are derived from it so a published tag can never claim a version the image
+  # does not contain.
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      server: ${{ steps.read.outputs.server }}
+      series: ${{ steps.read.outputs.series }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: read
+        run: |
+          set -euo pipefail
+          # ARG PERCONA_SERVER_VERSION=8.4.11-11-1.trixie -> 8.4.11-11 and 8.4
+          full="$(sed -n 's/^ARG PERCONA_SERVER_VERSION=\([0-9][0-9.]*-[0-9]*\).*/\1/p' Dockerfile)"
+          [ -n "$full" ] || { echo "could not read PERCONA_SERVER_VERSION from Dockerfile"; exit 1; }
+          echo "server=$full" >> "$GITHUB_OUTPUT"
+          echo "series=$(echo "$full" | cut -d. -f1,2)" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: version
     uses: vdementev/docker-workflows/.github/workflows/build-image.yml@v1
     permissions:
       contents: read
@@ -21,11 +41,15 @@ jobs:
     with:
       image: mysql-percona
       push: ${{ github.event_name != 'pull_request' }}
+      test-command: ./tests.sh
       tags: |
         type=raw,value=latest
+        type=raw,value=${{ needs.version.outputs.server }}
+        type=raw,value=${{ needs.version.outputs.series }}
       labels: |
         org.opencontainers.image.title=mysql-percona
-        org.opencontainers.image.description=Percona Server for MySQL 8.4 LTS on Debian slim — jemalloc, auto TLS, Docker-secrets support, unprivileged mysql user.
+        org.opencontainers.image.description=Percona Server for MySQL 8.4 LTS on Debian slim — XtraBackup included, jemalloc, auto TLS, Docker-secrets support, unprivileged mysql user.
+        org.opencontainers.image.version=${{ needs.version.outputs.server }}
         org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
         org.opencontainers.image.revision=${{ github.sha }}
     secrets: inherit

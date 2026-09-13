@@ -1,5 +1,9 @@
 [mysqld]
-bind-address = 0.0.0.0
+# Listen on both families: container networks are routinely dual-stack, Docker's
+# DNS then answers a service name with an A and an AAAA, and clients that pick
+# one family per connect instead of walking the list (ProxySQL) get ECONNREFUSED
+# on half their attempts against 0.0.0.0.
+bind-address = *
 port = 3306
 character-set-server = utf8mb4
 collation-server = utf8mb4_0900_ai_ci
@@ -10,6 +14,9 @@ host_cache_size = 0
 #innodb_numa_interleave = OFF
 log_replica_updates = ON
 mysqlx = 0
+# Provisioning a standby is CLONE INSTANCE, so load the plugin at startup
+# instead of leaving every deploy to INSTALL PLUGIN by hand.
+plugin-load-add = mysql_clone.so
 percona_telemetry_disable = 1
 skip-external-locking
 skip-name-resolve = 1
