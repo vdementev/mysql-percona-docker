@@ -12,6 +12,8 @@ mysql_log() {
 mysql_note() { mysql_log Note "$@"; }
 mysql_warn() { mysql_log Warn "$@" >&2; }
 mysql_error(){ mysql_log ERROR "$@" >&2; exit 1; }
+# Non-fatal: used by the background bootstrap, which must never take the server down.
+mysql_err()  { mysql_log ERROR "$@" >&2; }
 
 # usage: file_env VAR [DEFAULT]
 file_env() {
@@ -83,7 +85,11 @@ mysql_socket_fix() {
 }
 
 docker_temp_server_start() {
-  if ! "$@" --daemonize --skip-networking --default-time-zone=SYSTEM --socket="${SOCKET}"; then
+  # read-only/super-read-only off: the temp server exists to initialise this
+  # datadir, and on a node started as a standby (MYSQL_SUPER_READ_ONLY=ON)
+  # every statement below would otherwise be refused, root included.
+  if ! "$@" --daemonize --skip-networking --default-time-zone=SYSTEM --socket="${SOCKET}" \
+       --read-only=OFF --super-read-only=OFF; then
     mysql_error "Unable to start server."
   fi
 }
@@ -291,6 +297,179 @@ mysql_generate_ssl_certs() {
   mysql_note "SSL certificates generated"
 }
 
+# ---------------------------------------------------------------------------
+# Environment-driven server identity
+# ---------------------------------------------------------------------------
+# Rendered into /etc/mysql/env.d/, which /etc/my.cnf includes last, so these win
+# over the image defaults and over anything mounted into /etc/mysql/conf.d/.
+# Node identity and the standby role are then part of the container's
+# environment instead of a cnf forked per node: promoting a standby is an env
+# change plus a restart, not an edit to a mounted file.
+
+ENV_CONFIG_DIR='/etc/mysql/env.d'
+ENV_CONFIG_FILE="${ENV_CONFIG_DIR}/99-env.cnf"
+
+# usage: _mysql_bool VALUE  -> ON|OFF on stdout, non-zero exit if unparseable
+_mysql_bool() {
+  case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+    on|1|true|yes)  echo 'ON'  ;;
+    off|0|false|no) echo 'OFF' ;;
+    *) return 1 ;;
+  esac
+}
+
+mysql_render_env_config() {
+  file_env 'MYSQL_SERVER_ID'
+  file_env 'MYSQL_REPORT_HOST'
+  file_env 'MYSQL_READ_ONLY'
+  file_env 'MYSQL_SUPER_READ_ONLY'
+
+  local body='' value=''
+
+  if [ -n "$MYSQL_SERVER_ID" ]; then
+    case "$MYSQL_SERVER_ID" in
+      *[!0-9]*|'') mysql_error "MYSQL_SERVER_ID must be a positive integer, got '$MYSQL_SERVER_ID'" ;;
+    esac
+    body+="server_id = ${MYSQL_SERVER_ID}"$'\n'
+  fi
+
+  if [ -n "$MYSQL_REPORT_HOST" ]; then
+    # Keep it to what a hostname can hold: the value goes into a config file.
+    case "$MYSQL_REPORT_HOST" in
+      *[!A-Za-z0-9.:_-]*) mysql_error "MYSQL_REPORT_HOST may only contain letters, digits and .:_- , got '$MYSQL_REPORT_HOST'" ;;
+    esac
+    body+="report_host = ${MYSQL_REPORT_HOST}"$'\n'
+  fi
+
+  if [ -n "$MYSQL_READ_ONLY" ]; then
+    value="$(_mysql_bool "$MYSQL_READ_ONLY")" || mysql_error "MYSQL_READ_ONLY must be ON or OFF, got '$MYSQL_READ_ONLY'"
+    body+="read_only = ${value}"$'\n'
+  fi
+
+  if [ -n "$MYSQL_SUPER_READ_ONLY" ]; then
+    value="$(_mysql_bool "$MYSQL_SUPER_READ_ONLY")" || mysql_error "MYSQL_SUPER_READ_ONLY must be ON or OFF, got '$MYSQL_SUPER_READ_ONLY'"
+    body+="super_read_only = ${value}"$'\n'
+  fi
+
+  if [ -z "$body" ]; then
+    # Nothing set: drop a file left over from an earlier start, so unsetting a
+    # variable actually unsets the option.
+    rm -f "$ENV_CONFIG_FILE" 2>/dev/null || :
+    return
+  fi
+
+  if [ ! -w "$ENV_CONFIG_DIR" ]; then
+    mysql_error "$ENV_CONFIG_DIR is not writable — cannot apply MYSQL_SERVER_ID/MYSQL_REPORT_HOST/MYSQL_READ_ONLY/MYSQL_SUPER_READ_ONLY"
+  fi
+
+  # 0640: mysqld silently ignores a world-writable config file.
+  ( umask 0137; printf '%s\n%s' '[mysqld]' "$body" > "$ENV_CONFIG_FILE" )
+  mysql_note "Rendered $ENV_CONFIG_FILE from the environment:"
+  sed 's/^/    /' "$ENV_CONFIG_FILE"
+}
+
+# ---------------------------------------------------------------------------
+# Start-time bootstrap
+# ---------------------------------------------------------------------------
+# /docker-entrypoint-initdb.d runs only when the datadir is created, so on any
+# server that already has data it never runs again: accounts a deploy depends on
+# (a monitoring user, a rotated password) are simply absent, and nothing says
+# so. This pass runs against the real server on EVERY start, after mysqld is up,
+# and is meant for statements written to be idempotent — CREATE USER IF NOT
+# EXISTS followed by an unconditional ALTER USER, GRANT, and so on.
+#
+# It runs in the background: mysqld keeps PID 1 and is never delayed by it. A
+# failure here leaves the server running and logs at [ERROR] — that is the
+# signal, since the alternative is the silent drift this exists to prevent.
+
+ALWAYS_DIR='/docker-entrypoint-always.d'
+
+docker_process_always_files() {
+  local f
+  for f in "$ALWAYS_DIR"/*; do
+    case "$f" in
+      *.sh)
+        if [ -x "$f" ]; then
+          mysql_note "$0: running $f"; "$f"
+        else
+          mysql_note "$0: sourcing $f"; . "$f"
+        fi
+        ;;
+      *.sql)     mysql_note "$0: running $f"; docker_process_sql --database=mysql < "$f" ;;
+      *.sql.bz2) mysql_note "$0: running $f"; bunzip2 -c "$f" | docker_process_sql --database=mysql ;;
+      *.sql.gz)  mysql_note "$0: running $f"; gunzip  -c "$f" | docker_process_sql --database=mysql ;;
+      *.sql.xz)  mysql_note "$0: running $f"; xzcat      "$f" | docker_process_sql --database=mysql ;;
+      *.sql.zst) mysql_note "$0: running $f"; zstd  -dc  "$f" | docker_process_sql --database=mysql ;;
+      *)         mysql_warn "$0: ignoring $f" ;;
+    esac
+  done
+}
+
+# The healthcheck authenticates as this user, so it has to exist on a datadir
+# older than the healthcheck too. The unconditional ALTER is deliberate:
+# CREATE USER IF NOT EXISTS on its own is a no-op that leaves whatever password
+# the account already had.
+mysql_ensure_healthcheck_user() {
+  docker_process_sql --database=mysql <<-'EOSQL'
+    SET @@SESSION.SQL_LOG_BIN=0;
+    CREATE USER IF NOT EXISTS 'ping'@'localhost' IDENTIFIED BY 'pong';
+    ALTER USER 'ping'@'localhost' IDENTIFIED BY 'pong';
+    GRANT USAGE ON *.* TO 'ping'@'localhost';
+    CREATE USER IF NOT EXISTS 'ping'@'127.0.0.1' IDENTIFIED BY 'pong';
+    ALTER USER 'ping'@'127.0.0.1' IDENTIFIED BY 'pong';
+    GRANT USAGE ON *.* TO 'ping'@'127.0.0.1';
+EOSQL
+}
+
+mysql_query_value() {
+  docker_process_sql --database=mysql --batch --skip-column-names <<<"$1"
+}
+
+mysql_bootstrap_on_start() {
+  local timeout="${MYSQL_ALWAYS_TIMEOUT:-900}" waited=0 err=''
+
+  while ! err="$(mysql_query_value 'SELECT 1' 2>&1 >/dev/null)"; do
+    if [ "$waited" -ge "$timeout" ]; then
+      mysql_err "start-time bootstrap: could not connect as root within ${timeout}s — ${ALWAYS_DIR} NOT applied. Last error: ${err}"
+      return 1
+    fi
+    sleep 2
+    waited=$(( waited + 2 ))
+  done
+
+  # super_read_only blocks root as well, which is the point of it on a standby:
+  # its accounts and grants arrive over replication (or came with the CLONE),
+  # they are not applied locally. read_only alone does not block root, so it is
+  # not a reason to skip.
+  if [ "$(mysql_query_value 'SELECT @@global.super_read_only' 2>/dev/null || echo 0)" = '1' ]; then
+    mysql_note "start-time bootstrap: server is super_read_only, skipping (writes replicate from the primary)"
+    return 0
+  fi
+
+  if [ -z "${MYSQL_HEALTHCHECK_DISABLE:-}" ]; then
+    if ! mysql_ensure_healthcheck_user; then
+      mysql_err "start-time bootstrap: could not create the 'ping' healthcheck user"
+      return 1
+    fi
+  fi
+
+  if ! docker_process_always_files; then
+    mysql_err "start-time bootstrap FAILED — the server is up but ${ALWAYS_DIR} was not fully applied"
+    return 1
+  fi
+
+  mysql_note "start-time bootstrap complete"
+}
+
+mysql_start_bootstrap() {
+  local have_files=''
+  [ -n "$(ls -A "$ALWAYS_DIR" 2>/dev/null)" ] && have_files='true'
+  if [ -z "$have_files" ] && [ -n "${MYSQL_HEALTHCHECK_DISABLE:-}" ]; then
+    return
+  fi
+  mysql_bootstrap_on_start &
+}
+
 _mysql_want_help() {
   local arg
   for arg; do
@@ -309,6 +488,7 @@ _main() {
   if [ "$1" = 'mysqld' ] && ! _mysql_want_help "$@"; then
     mysql_note "Entrypoint script for MySQL Server ${MYSQL_VERSION} started."
 
+    mysql_render_env_config
     mysql_generate_ssl_certs
     mysql_check_config "$@"
     docker_setup_env "$@"
@@ -348,6 +528,10 @@ _main() {
     else
       mysql_socket_fix
     fi
+
+    # Backgrounded: waits for the server this exec is about to become, then
+    # applies the start-time bootstrap. mysqld stays PID 1 and is not delayed.
+    mysql_start_bootstrap
   fi
 
   exec "$@"

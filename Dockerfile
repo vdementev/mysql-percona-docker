@@ -45,10 +45,24 @@ RUN set -eux; \
     install -d -m 0750 -o mysql -g mysql /var/run/mysqld; \
     install -d -m 0750 -o mysql -g mysql /var/lib/mysql-files; \
     install -d -m 0750 -o mysql -g mysql /docker-entrypoint-initdb.d; \
+    install -d -m 0750 -o mysql -g mysql /docker-entrypoint-always.d; \
     install -d -m 0750 -o mysql -g mysql /tmp-replica; \
     install -d -m 0750 -o mysql -g mysql /etc/mysql/ssl; \
+    # Drop-in dir for consumers. Separate from mysql.conf.d because an
+    # includedir is read in sorted order and the last assignment wins: a file
+    # dropped next to the image's own 10-/20-/30- configs has to be named so it
+    # sorts after them, which is a trap. conf.d is read after mysql.conf.d, so
+    # any filename in it overrides the defaults.
+    install -d -m 0755 -o root -g root /etc/mysql/conf.d; \
+    # Rendered by the entrypoint from the MYSQL_SERVER_ID / MYSQL_REPORT_HOST /
+    # MYSQL_READ_ONLY knobs; read last, so the environment wins over any cnf.
+    # Owned by mysql: the entrypoint writes it unprivileged.
+    install -d -m 0750 -o mysql -g mysql /etc/mysql/env.d; \
     # Make global include file
-    printf '%s\n' '!includedir /etc/mysql/mysql.conf.d/' > /etc/my.cnf; \
+    printf '%s\n' \
+    '!includedir /etc/mysql/mysql.conf.d/' \
+    '!includedir /etc/mysql/conf.d/' \
+    '!includedir /etc/mysql/env.d/' > /etc/my.cnf; \
     chown root:root /etc/my.cnf; \
     chmod 0644 /etc/my.cnf
 
@@ -62,8 +76,14 @@ COPY --chown=root:root --chmod=0755 ./docker-entrypoint.sh /docker-entrypoint.sh
 
 VOLUME ["/var/lib/mysql"]
 
+# Not `mysqladmin ping`: it exits 0 on ER_ACCESS_DENIED, because the server did
+# answer and that is all ping asks — a container nothing can authenticate to
+# reports healthy. An authenticated statement covers both. The entrypoint
+# recreates the ping user on every start, so this also holds on a datadir that
+# predates it (set MYSQL_HEALTHCHECK_DISABLE to opt out of both).
 HEALTHCHECK --start-interval=15s --interval=10s --timeout=3s --start-period=60s --retries=3 \
-    CMD ["mysqladmin","--host=127.0.0.1","--user=ping","--password=pong","--connect-timeout=1","--silent","ping"]
+    CMD MYSQL_PWD=pong mysql --host=127.0.0.1 --user=ping --connect-timeout=1 \
+        --batch --skip-column-names --execute='SELECT 1' >/dev/null 2>&1
 
 USER mysql
 
