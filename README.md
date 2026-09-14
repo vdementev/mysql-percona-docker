@@ -1,6 +1,28 @@
-## Percona MySQL Server 8.4
+# mysql-percona
 
-Minimal Percona Server for MySQL 8.4 LTS on Debian 13 (slim), with XtraBackup.
+Percona Server for MySQL 8.4 LTS on Debian 13 slim, built to be run by people
+who have to operate it: XtraBackup in the image, TLS on first boot, Docker
+secrets, an honest healthcheck, and an entrypoint that treats node identity as
+environment rather than as a forked config file.
+
+Published as [`dementev/mysql-percona`](https://hub.docker.com/r/dementev/mysql-percona)
+for `linux/amd64` and `linux/arm64`.
+
+```yaml
+services:
+  db:
+    image: dementev/mysql-percona:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/db_root
+      MYSQL_DATABASE: app
+    secrets: [db_root]
+    volumes:
+      - /data/mysql:/var/lib/mysql
+```
+
+Runs as `mysql` (uid/gid 1001) with no root path and no gosu — by design. The
+data directory has to be writable by 1001.
 
 ## Features
 - jemalloc allocator (LD_PRELOAD)
@@ -18,6 +40,10 @@ Minimal Percona Server for MySQL 8.4 LTS on Debian 13 (slim), with XtraBackup.
 | `8.4.11-11` | never — one server version, rebuilt for base-layer patches |
 | `8.4` | with each 8.4 LTS release |
 | `latest` | with every build |
+
+Version tags are read out of the image *after* it is built and the backup and
+restore suite has passed, so a tag can never claim a server version the image
+does not run. Full lifecycle and upgrade rules: [SUPPORT.md](SUPPORT.md).
 
 Pin `8.4.11-11` (or a digest) for anything holding data. Everything installed is
 pinned in the Dockerfile — base image by digest, server and XtraBackup by apt
@@ -153,3 +179,54 @@ start, so TLS needs no setup. After a clone, `RESET PERSIST` and
   still ends up ACTIVE). Clear it once with `UNINSTALL PLUGIN clone;`.
 - Mounting a tmpfs over `/var/run/mysqld` needs an explicit `mode=1777`: Docker defaults a
   tmpfs with options to 0750 root:root and the server runs as uid 1001.
+
+## Security and provenance
+
+Every published digest is built by the shared pipeline in
+[vdementev/docker-workflows](https://github.com/vdementev/docker-workflows).
+Pull requests build, test and scan without publishing; `main` is
+branch-protected, so nothing reaches Docker Hub without a green check behind it.
+A Trivy gate fails the build on any *fixable* CRITICAL or HIGH finding, and each
+published digest carries an SBOM, max-mode SLSA provenance and a keyless Cosign
+signature.
+
+Verify what you pulled:
+
+```sh
+cosign verify \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp 'github.com/vdementev/' \
+  dementev/mysql-percona:latest
+```
+
+[SECURITY.md](SECURITY.md) is the reporting channel and the response
+targets; [SUPPORT.md](SUPPORT.md) covers tag lifecycle, pinning and
+patch cadence.
+
+## Related images
+
+One family, built by the same pipeline, meant to run together — a proxy in
+front, an app runtime, a database, and a way into it.
+
+| Image | What it does |
+|---|---|
+| [`dementev/angie`](https://hub.docker.com/r/dementev/angie) — [source](https://github.com/vdementev/angie-docker) | Public-facing reverse proxy and TLS terminator — Angie, the nginx fork, with brotli, zstd and cache-purge |
+| [`dementev/nginx`](https://hub.docker.com/r/dementev/nginx) — [source](https://github.com/vdementev/nginx-docker) | Static sites and SPAs behind that proxy — brotli/zstd siblings, Prometheus stub_status |
+| [`dementev/php-fpm-with-ext`](https://hub.docker.com/r/dementev/php-fpm-with-ext) — [source](https://github.com/vdementev/docker-php-fpm-with-ext) | PHP-FPM and CLI, PHP 7.0 → 8.5, with the extensions most projects reach for |
+| **[`dementev/mysql-percona`](https://hub.docker.com/r/dementev/mysql-percona)** — this image | Percona Server for MySQL 8.4 LTS, XtraBackup built in, no root inside |
+| [`dementev/adminer`](https://hub.docker.com/r/dementev/adminer) — [source](https://github.com/vdementev/adminer-docker) | Adminer 6 with every driver it supports, for reaching any of the above |
+
+## Maintainer
+
+Built and maintained by [Vasilii Dementev](https://vasiliidementev.com) at
+[Lotus Web Agency](https://lotuswebagency.com). These images are not a side
+project — they are the base layer under the client and product systems we run,
+which is why they are gated, tested and signed rather than pushed by hand.
+
+Issues and pull requests:
+[github.com/vdementev/mysql-percona-docker](https://github.com/vdementev/mysql-percona-docker).
+Need this kind of infrastructure built or maintained for your own stack?
+[lotuswebagency.com](https://lotuswebagency.com).
+
+Packaging in this repository is MIT licensed — see [LICENSE](LICENSE). The software
+inside the image keeps its own upstream licenses.

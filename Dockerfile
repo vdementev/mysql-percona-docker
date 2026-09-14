@@ -4,6 +4,16 @@
 # Bumping a version is a commit, and the published tags follow it.
 FROM debian:13-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132
 
+# OCI metadata. CI adds revision/version/created on top of these.
+LABEL org.opencontainers.image.title="mysql-percona" \
+      org.opencontainers.image.description="Percona Server for MySQL 8.4 LTS on Debian slim — XtraBackup included, jemalloc, auto TLS, Docker-secrets support, unprivileged mysql user." \
+      org.opencontainers.image.url="https://hub.docker.com/r/dementev/mysql-percona" \
+      org.opencontainers.image.documentation="https://github.com/vdementev/mysql-percona-docker#readme" \
+      org.opencontainers.image.source="https://github.com/vdementev/mysql-percona-docker" \
+      org.opencontainers.image.vendor="Lotus Web Agency" \
+      org.opencontainers.image.authors="Vasilii Dementev https://vasiliidementev.com" \
+      org.opencontainers.image.licenses="MIT"
+
 # Percona Server for MySQL 8.4 LTS. Tags are derived from this in CI.
 ARG PERCONA_SERVER_VERSION=8.4.11-11-1.trixie
 # XtraBackup ships in the image so backups run without a sidecar and can never
