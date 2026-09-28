@@ -18,7 +18,7 @@ LABEL org.opencontainers.image.title="mysql-percona" \
 ARG PERCONA_SERVER_VERSION=8.4.11-11-1.trixie
 # XtraBackup ships in the image so backups run without a sidecar and can never
 # drift from the server version. Its numbering is its own, not the server's.
-ARG PERCONA_XTRABACKUP_VERSION=8.4.0-7-1.trixie
+ARG PERCONA_XTRABACKUP_VERSION=8.4.0-6-1.trixie
 ARG PERCONA_RELEASE_VERSION=1.0-34
 
 ENV DEBIAN_FRONTEND=noninteractive
