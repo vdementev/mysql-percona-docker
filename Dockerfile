@@ -2,7 +2,7 @@
 # carries a database: an unpinned install plus the weekly rebuild moves the server
 # version under a live datadir, which upgrades in place and does not go back.
 # Bumping a version is a commit, and the published tags follow it.
-FROM debian:13-slim@sha256:d7e12182ce18b85b93007c1dedf31f2d29e01ccf3182cc4017c709b6259bc132
+FROM debian:13-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a
 
 # OCI metadata. CI adds revision/version/created on top of these.
 LABEL org.opencontainers.image.title="mysql-percona" \
@@ -18,7 +18,7 @@ LABEL org.opencontainers.image.title="mysql-percona" \
 ARG PERCONA_SERVER_VERSION=8.4.11-11-1.trixie
 # XtraBackup ships in the image so backups run without a sidecar and can never
 # drift from the server version. Its numbering is its own, not the server's.
-ARG PERCONA_XTRABACKUP_VERSION=8.4.0-6-1.trixie
+ARG PERCONA_XTRABACKUP_VERSION=8.4.0-7-1.trixie
 ARG PERCONA_RELEASE_VERSION=1.0-34
 
 ENV DEBIAN_FRONTEND=noninteractive
