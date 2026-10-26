@@ -11,6 +11,10 @@ default_storage_engine = InnoDB
 enforce_gtid_consistency = ON
 gtid_mode = ON
 host_cache_size = 0
+# Server default since 8.0, stated so a copied cnf can't quietly turn it back
+# on: with LOAD DATA LOCAL allowed, one SQL injection reads files off the
+# application host.
+local_infile = OFF
 #innodb_numa_interleave = OFF
 log_replica_updates = ON
 mysqlx = 0
