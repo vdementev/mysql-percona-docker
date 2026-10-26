@@ -2,7 +2,7 @@
 # carries a database: an unpinned install plus the weekly rebuild moves the server
 # version under a live datadir, which upgrades in place and does not go back.
 # Bumping a version is a commit, and the published tags follow it.
-FROM debian:13-slim@sha256:a29215f6a35e51e22adffa17f89e9d2ef06214e64a2bad10d765c46aea49f11f
+FROM debian:13-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad
 
 # OCI metadata. CI adds revision/version/created on top of these.
 LABEL org.opencontainers.image.title="mysql-percona" \
@@ -63,6 +63,10 @@ RUN set -eux; \
     # ~220 MB that nothing in a production container ever executes.
     rm -f /usr/sbin/mysqld-debug /usr/bin/xtrabackup-debug; \
     rm -rf /usr/lib/mysql/plugin/debug; \
+    # The container runs as mysql with no path back to root, so nothing may
+    # escalate either: strip every setuid/setgid bit Debian ships (su, mount,
+    # passwd, chsh, newgrp, …).
+    find / -xdev -type f -perm /6000 -exec chmod a-s '{}' +; \
     # Prepare directories
     rm -rf /etc/mysql; \
     rm -rf /var/lib/mysql; \
