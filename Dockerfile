@@ -2,7 +2,7 @@
 # carries a database: an unpinned install plus the weekly rebuild moves the server
 # version under a live datadir, which upgrades in place and does not go back.
 # Bumping a version is a commit, and the published tags follow it.
-FROM debian:13-slim@sha256:62bd423aeee912639ca8ee681c2b762cb3e25137e0a92b20be455898a9f034ad
+FROM debian:13-slim@sha256:f6b08b09a05725f9431502d3b5714f5c4576e82c1a84fa1debe0c24a7e0c3ec4
 
 # OCI metadata. CI adds revision/version/created on top of these.
 LABEL org.opencontainers.image.title="mysql-percona" \
