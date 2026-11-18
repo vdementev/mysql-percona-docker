@@ -5,7 +5,7 @@
 | Tag | Contents |
 |---|---|
 | `latest` | The newest build of the current series. Moves on every merge to `main` and on the weekly rebuild. |
-| `8.4.11-11` | That exact Percona Server release. Republished in place (new digest, same tag) while it is current. |
+| `8.4.11-12` | That exact Percona Server release. Republished in place (new digest, same tag) while it is current. |
 | `8.4` | The newest release of the 8.4 LTS series. |
 
 Version tags are read out of the image after it is built and tested, so a tag
@@ -51,7 +51,7 @@ byte-identical:
 ```yaml
 services:
   mysql:
-    image: dementev/mysql-percona:8.4.11-11@sha256:...
+    image: dementev/mysql-percona:8.4.11-12@sha256:...
 ```
 
 ## Patch cadence

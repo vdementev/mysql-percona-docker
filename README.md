@@ -37,7 +37,7 @@ data directory has to be writable by 1001.
 
 | Tag | Moves |
 |---|---|
-| `8.4.11-11` | never — one server version, rebuilt for base-layer patches |
+| `8.4.11-12` | never — one server version, rebuilt for base-layer patches |
 | `8.4` | with each 8.4 LTS release |
 | `latest` | with every build |
 
@@ -45,7 +45,7 @@ Version tags are read out of the image *after* it is built and the backup and
 restore suite has passed, so a tag can never claim a server version the image
 does not run. Full lifecycle and upgrade rules: [SUPPORT.md](SUPPORT.md).
 
-Pin `8.4.11-11` (or a digest) for anything holding data. Everything installed is
+Pin `8.4.11-12` (or a digest) for anything holding data. Everything installed is
 pinned in the Dockerfile — base image by digest, server and XtraBackup by apt
 version — so a rebuild patches the base layers and nothing else. Version bumps
 are a commit, and the tags follow it.
