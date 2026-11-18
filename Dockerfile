@@ -15,7 +15,7 @@ LABEL org.opencontainers.image.title="mysql-percona" \
       org.opencontainers.image.licenses="MIT"
 
 # Percona Server for MySQL 8.4 LTS. Tags are derived from this in CI.
-ARG PERCONA_SERVER_VERSION=8.4.11-11-1.trixie
+ARG PERCONA_SERVER_VERSION=8.4.11-12-1.trixie
 # XtraBackup ships in the image so backups run without a sidecar and can never
 # drift from the server version. Its numbering is its own, not the server's.
 ARG PERCONA_XTRABACKUP_VERSION=8.4.0-6-1.trixie

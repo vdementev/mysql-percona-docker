@@ -9,13 +9,13 @@ environment rather than as a config file forked per node.
 
 | Tag | Moves |
 |---|---|
-| `8.4.11-11` | never — one server version, rebuilt for base-layer patches |
+| `8.4.11-12` | never — one server version, rebuilt for base-layer patches |
 | `8.4` | with each 8.4 LTS release |
 | `latest` | with every build |
 
 Version tags are read out of the image *after* it is built and the backup and
 restore suite has passed, so a tag can never claim a server version the image
-does not run. Pin `8.4.11-11` or a digest for anything holding data.
+does not run. Pin `8.4.11-12` or a digest for anything holding data.
 
 Multi-arch: `linux/amd64`, `linux/arm64`. SBOM, max-mode build provenance and a
 keyless Cosign signature on every published digest.

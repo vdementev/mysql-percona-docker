@@ -24,7 +24,7 @@ jobs:
       test-command: ./tests.sh
       # Tags come out of the built image, not out of the Dockerfile ARG, so a
       # published tag can never claim a server version the image does not run:
-      # 8.4.11-11 and 8.4, next to latest.
+      # 8.4.11-12 and 8.4, next to latest.
       version-command: docker run --rm --entrypoint mysqld "$IMAGE" --version | sed -n 's/.* Ver \([^ ]*\) for .*/\1/p'
       tags: |
         type=raw,value=latest
